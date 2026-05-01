@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pt
+*.pth
+*.npy
+data/
+results/
+.kaggle/
+__pycache__/
+*.pyc
