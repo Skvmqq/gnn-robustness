@@ -1,3 +1,4 @@
+import json
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -152,6 +153,7 @@ def _plot_results(args, gcn_results, mlp_results, lr_results):
     plt.title("Accuracy vs Noise Level")
     plt.legend()
     plt.grid(True)
+    plt.savefig('/kaggle/working/robustness_results.png')
     plt.show()
 
 
@@ -248,12 +250,24 @@ def run_one_dataset(dataset_name, args):
             lr_results[i].append(lr_acc)
 
     print("\n===== FINAL (PER NOISE) =====")
+    results_summary = {}
     for i, p in enumerate(args.noise_levels):
+        summary = {
+            "GCN": {"mean": float(np.mean(gcn_results[i])), "std": float(np.std(gcn_results[i]))},
+            "MLP": {"mean": float(np.mean(mlp_results[i])), "std": float(np.std(mlp_results[i]))},
+            "LogReg": {"mean": float(np.mean(lr_results[i])), "std": float(np.std(lr_results[i]))},
+        }
+        results_summary[f"noise_{p}"] = summary
         print(
             f"Noise {p:.1f} | "
             f"GCN {np.mean(gcn_results[i]):.4f} ± {np.std(gcn_results[i]):.4f} | "
             f"MLP {np.mean(mlp_results[i]):.4f} ± {np.std(mlp_results[i]):.4f} | "
             f"LogReg {np.mean(lr_results[i]):.4f} ± {np.std(lr_results[i]):.4f}"
         )
+    
+    
+    with open('/kaggle/working/results.json', 'w') as f:
+        json.dump(results_summary, f, indent=2)
+    print("\n✓ Results saved to /kaggle/working/results.json")
 
     _plot_results(args, gcn_results, mlp_results, lr_results)
