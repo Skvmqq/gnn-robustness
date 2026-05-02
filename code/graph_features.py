@@ -19,6 +19,12 @@ class GraphFeatures:
     def pagerank(self):
         return self.G.pagerank()
 
+    def closeness_centrality(self):
+        return self.G.closeness()
+
+    def eigenvector_centrality(self):
+        return self.G.eigenvector_centrality()
+
     def betweenness(self, normalized=True, cutoff=None):
         bc = self.G.betweenness(cutoff=cutoff)
 

@@ -44,7 +44,7 @@ def train_model_graph(
                 "percent": edge_aug_percent,
                 "is_undirected": edge_aug_is_undirected,
             }
-            if edge_aug_mode == "bw_prob":
+            if edge_aug_mode in {"bw_prob", "pagerank_prob", "degree_prob"}:
                 edge_kwargs["bc"] = bc
             edge_in = augment_edges(data.edge_index, **edge_kwargs)
 
@@ -91,7 +91,7 @@ def train_model_base(model, data, lr=0.001, epochs=400):
 
 
 @torch.no_grad()
-def eval_under_feature_noise(
+def eval_under_noise(
     model,
     data,
     noise_levels,
@@ -101,12 +101,21 @@ def eval_under_feature_noise(
     shield_threshold=0.15,
     shield_drop_ratio=0.1,
     shield_only_when_noisy=True,
+    eval_edge_aug_mode=None,
+    eval_edge_aug_percent=0.1,
+    eval_edge_aug_is_undirected=True,
+    eval_apply_feature_noise=True,
+    eval_edge_percent_from_noise=True,
+    bc=None,
 ):
     model.eval()
     accs = []
 
     for p in noise_levels:
-        noisy_x = augment_features(data.x, mode=noise_mode, percent=p)
+        if eval_apply_feature_noise:
+            noisy_x = augment_features(data.x, mode=noise_mode, percent=p)
+        else:
+            noisy_x = data.x
         apply_shield = use_shield and (not shield_only_when_noisy or p > 0)
         if apply_shield:
             eval_edge_index = feature_similarity_rewiring(
@@ -119,6 +128,16 @@ def eval_under_feature_noise(
         else:
             eval_edge_index = data.edge_index
 
+        if eval_edge_aug_mode is not None:
+            edge_kwargs = {
+                "mode": eval_edge_aug_mode,
+                "percent": p if eval_edge_percent_from_noise else eval_edge_aug_percent,
+                "is_undirected": eval_edge_aug_is_undirected,
+            }
+            if eval_edge_aug_mode in {"bw_prob", "pagerank_prob", "degree_prob", "closeness_prob", "eigenvector_prob"}:
+                edge_kwargs["bc"] = bc
+            eval_edge_index = augment_edges(eval_edge_index, **edge_kwargs)
+
         logits = model(noisy_x, eval_edge_index)
         accs.append(masked_accuracy(logits, data.y, data.test_mask))
 
@@ -129,6 +148,47 @@ def bw_centrality(data):
     gf = graph_features.GraphFeatures(data, un_directed=True)
     bc = gf.betweenness(normalized=True)
     return torch.tensor(bc, dtype=torch.float, device=data.edge_index.device)
+
+
+def pagerank_centrality(data):
+    gf = graph_features.GraphFeatures(data, un_directed=True)
+    pr = gf.pagerank()
+    return torch.tensor(pr, dtype=torch.float, device=data.edge_index.device)
+
+
+def degree_centrality(data):
+    gf = graph_features.GraphFeatures(data, un_directed=True)
+    dc = gf.degree_centrality()
+    return torch.tensor(dc, dtype=torch.float, device=data.edge_index.device)
+
+
+def closeness_centrality(data):
+    gf = graph_features.GraphFeatures(data, un_directed=True)
+    cc = gf.closeness_centrality()
+    return torch.tensor(cc, dtype=torch.float, device=data.edge_index.device)
+
+
+def eigenvector_centrality(data):
+    gf = graph_features.GraphFeatures(data, un_directed=True)
+    try:
+        ec = gf.eigenvector_centrality()
+    except Exception:
+        ec = [0.0] * data.num_nodes
+    return torch.tensor(ec, dtype=torch.float, device=data.edge_index.device)
+
+
+def centrality_scores(data, edge_aug_mode):
+    if edge_aug_mode == "bw_prob":
+        return bw_centrality(data)
+    if edge_aug_mode == "pagerank_prob":
+        return pagerank_centrality(data)
+    if edge_aug_mode == "degree_prob":
+        return degree_centrality(data)
+    if edge_aug_mode == "closeness_prob":
+        return closeness_centrality(data)
+    if edge_aug_mode == "eigenvector_prob":
+        return eigenvector_centrality(data)
+    return None
 
 
 def _plot_results(args, gcn_results, mlp_results, lr_results):
@@ -173,6 +233,12 @@ def run_one_dataset(dataset_name, args):
     eval_shield_threshold = getattr(args, "eval_shield_threshold", 0.15)
     eval_shield_drop_ratio = getattr(args, "eval_shield_drop_ratio", 0.1)
     eval_shield_only_when_noisy = getattr(args, "eval_shield_only_when_noisy", True)
+    
+    eval_edge_aug_mode = getattr(args, "eval_edge_aug_mode", None)
+    eval_edge_aug_percent = getattr(args, "eval_edge_aug_percent", 0.1)
+    eval_edge_aug_is_undirected = getattr(args, "eval_edge_aug_is_undirected", True)
+    eval_apply_feature_noise = getattr(args, "eval_apply_feature_noise", True)
+    eval_edge_percent_from_noise = getattr(args, "eval_edge_percent_from_noise", True)
 
     bc = None
 
@@ -189,7 +255,8 @@ def run_one_dataset(dataset_name, args):
         num_test=1000,
 )
     data_run = transform(data.clone())
-    bc = bw_centrality(data_run) if edge_aug_mode == "bw_prob" else None
+    bc = centrality_scores(data_run, edge_aug_mode)
+    eval_bc = centrality_scores(data_run, eval_edge_aug_mode) if eval_edge_aug_mode else None
     for run in range(args.runs):
         print(f"\n--- Run {run + 1}/{args.runs} ---")
         set_seed(run)
@@ -216,7 +283,7 @@ def run_one_dataset(dataset_name, args):
         logreg = LogisticRegressionModel(max_iter=1000, random_state=run)
         logreg.fit(data_run.x[data_run.train_mask], data_run.y[data_run.train_mask])
 
-        gcn_curve = eval_under_feature_noise(
+        gcn_curve = eval_under_noise(
             gcn,
             data_run,
             args.noise_levels,
@@ -226,16 +293,31 @@ def run_one_dataset(dataset_name, args):
             shield_threshold=eval_shield_threshold,
             shield_drop_ratio=eval_shield_drop_ratio,
             shield_only_when_noisy=eval_shield_only_when_noisy,
+            eval_edge_aug_mode=eval_edge_aug_mode,
+            eval_edge_aug_percent=eval_edge_aug_percent,
+            eval_edge_aug_is_undirected=eval_edge_aug_is_undirected,
+            eval_apply_feature_noise=eval_apply_feature_noise,
+            eval_edge_percent_from_noise=eval_edge_percent_from_noise,
+            bc=eval_bc,
         )
-        mlp_curve = eval_under_feature_noise(
+        mlp_curve = eval_under_noise(
             mlp,
             data_run,
             args.noise_levels,
             noise_mode=eval_noise_mode,
+            eval_edge_aug_mode=eval_edge_aug_mode,
+            eval_edge_aug_percent=eval_edge_aug_percent,
+            eval_edge_aug_is_undirected=eval_edge_aug_is_undirected,
+            eval_apply_feature_noise=eval_apply_feature_noise,
+            eval_edge_percent_from_noise=eval_edge_percent_from_noise,
+            bc=eval_bc,
         )
 
         for i, p in enumerate(args.noise_levels):
-            noisy_x = augment_features(data_run.x, mode=eval_noise_mode, percent=p)
+            if eval_apply_feature_noise:
+                noisy_x = augment_features(data_run.x, mode=eval_noise_mode, percent=p)
+            else:
+                noisy_x = data_run.x
             pred_lr = logreg.predict(noisy_x[data_run.test_mask])
             pred_lr = torch.tensor(pred_lr)
             lr_acc = (pred_lr == data_run.y[data_run.test_mask]).float().mean().item()

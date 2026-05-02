@@ -18,9 +18,21 @@ class BaseArgs:
 def run_suite():
     
     scenarios = [
-        {"name": "General_Baseline", "feat_mode": None, "edge_mode": None},
-        {"name": "Feature_Augmentation", "feat_mode": "noise", "edge_mode": None},
-        {"name": "Edge_Augmentation", "feat_mode": None, "edge_mode": "dropout"}
+        {"name":"TrainEdge_None__Eval_FeatureNoiseOnly","feat_mode":None,"edge_mode":None, "eval_edge_mode": None, "eval_feature_noise": True},
+        {"name":"TrainEdge_None__Eval_EdgeDropoutOnly","feat_mode":None,"edge_mode":None, "eval_edge_mode": "dropout", "eval_feature_noise": False},
+        {"name":"TrainEdge_None__Eval_FeatureNoisePlusEdgeDropout","feat_mode":None,"edge_mode":None, "eval_edge_mode": "dropout", "eval_feature_noise": True},
+        
+        {"name":"TrainEdge_BWProb__Eval_FeatureNoiseOnly","feat_mode":None,"edge_mode":"bw_prob", "eval_edge_mode": None, "eval_feature_noise": True},
+        {"name":"TrainEdge_BWProb__Eval_EdgeDropoutOnly","feat_mode":None,"edge_mode":"bw_prob", "eval_edge_mode": "dropout", "eval_feature_noise": False},
+        {"name":"TrainEdge_BWProb__Eval_FeatureNoisePlusEdgeDropout","feat_mode":None,"edge_mode":"bw_prob", "eval_edge_mode": "dropout", "eval_feature_noise": True},
+        
+        {"name":"TrainEdge_PageRankProb__Eval_FeatureNoiseOnly","feat_mode":None,"edge_mode":"pagerank_prob", "eval_edge_mode": None, "eval_feature_noise": True},
+        {"name":"TrainEdge_PageRankProb__Eval_EdgeDropoutOnly","feat_mode":None,"edge_mode":"pagerank_prob", "eval_edge_mode": "dropout", "eval_feature_noise": False},
+        {"name":"TrainEdge_PageRankProb__Eval_FeatureNoisePlusEdgeDropout","feat_mode":None,"edge_mode":"pagerank_prob", "eval_edge_mode": "dropout", "eval_feature_noise": True},
+        
+        {"name":"TrainEdge_DegreeProb__Eval_FeatureNoiseOnly","feat_mode":None,"edge_mode":"degree_prob", "eval_edge_mode": None, "eval_feature_noise": True},
+        {"name":"TrainEdge_DegreeProb__Eval_EdgeDropoutOnly","feat_mode":None,"edge_mode":"degree_prob", "eval_edge_mode": "dropout", "eval_feature_noise": False},
+        {"name":"TrainEdge_DegreeProb__Eval_FeatureNoisePlusEdgeDropout","feat_mode":None,"edge_mode":"degree_prob", "eval_edge_mode": "dropout", "eval_feature_noise": True},
         
     ]
 
@@ -34,8 +46,13 @@ def run_suite():
         args.train_feat_aug_mode = scenario['feat_mode']
         args.train_feat_aug_percent = 0.1
         args.edge_aug_mode = scenario['edge_mode']
-        args.edge_aug_percent = 0.07
+        args.edge_aug_percent = 0.1
         args.edge_aug_is_undirected = True
+        args.eval_edge_aug_mode = scenario['eval_edge_mode']
+        args.eval_edge_aug_percent = 0.1
+        args.eval_edge_aug_is_undirected = True
+        args.eval_apply_feature_noise = scenario.get('eval_feature_noise', True)
+        args.eval_edge_percent_from_noise = True
 
        
         try:

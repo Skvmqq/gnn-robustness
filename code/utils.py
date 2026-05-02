@@ -5,6 +5,70 @@ import numpy as np
 import torch.nn.functional as F
 
 
+def _probabilistic_remove_edges(edge_index, percent, scores, is_undirected):
+    if not torch.is_tensor(scores):
+        scores = torch.tensor(scores, dtype=torch.float, device=edge_index.device)
+    else:
+        scores = scores.to(device=edge_index.device, dtype=torch.float)
+
+    row, col = edge_index
+    edge_scores = (scores[row] + scores[col]) / 2.0
+
+    if is_undirected:
+        mask = row < col
+        unique_edges = edge_index[:, mask]
+        unique_scores = edge_scores[mask]
+    else:
+        unique_edges = edge_index
+        unique_scores = edge_scores
+
+    if unique_edges.size(1) == 0:
+        return edge_index
+
+    if unique_scores.sum() <= 0:
+        probs = torch.ones_like(unique_scores) / unique_scores.numel()
+    else:
+        probs = unique_scores / unique_scores.sum()
+
+    num_edges = unique_edges.size(1)
+    num_remove = int(num_edges * percent)
+    num_remove = min(max(num_remove, 0), num_edges)
+
+    if num_remove > 0:
+        remove_idx = torch.multinomial(probs, num_remove, replacement=False)
+        edges_to_remove = unique_edges[:, remove_idx]
+    else:
+        return edge_index
+
+    num_nodes = int(edge_index.max().item()) + 1
+    if is_undirected:
+        all_row, all_col = edge_index
+        all_u = torch.minimum(all_row, all_col)
+        all_v = torch.maximum(all_row, all_col)
+        all_keys = all_u * num_nodes + all_v
+
+        rem_row, rem_col = edges_to_remove
+        rem_u = torch.minimum(rem_row, rem_col)
+        rem_v = torch.maximum(rem_row, rem_col)
+        rem_keys = rem_u * num_nodes + rem_v
+    else:
+        all_row, all_col = edge_index
+        all_keys = all_row * num_nodes + all_col
+        rem_row, rem_col = edges_to_remove
+        rem_keys = rem_row * num_nodes + rem_col
+
+    keep_mask = ~torch.isin(all_keys, rem_keys)
+    new_edge_index = edge_index[:, keep_mask]
+
+    if is_undirected:
+        row, col = new_edge_index
+        rev_edges = torch.stack([col, row], dim=0)
+        new_edge_index = torch.cat([new_edge_index, rev_edges], dim=1)
+        new_edge_index = torch.unique(new_edge_index, dim=1)
+
+    return new_edge_index
+
+
 def feature_similarity_rewiring(
     x,
     edge_index,
@@ -122,69 +186,12 @@ def augment_edges(
     elif mode == "bw_prob":
         if bc is None:
             raise ValueError("For mode='bw_prob', provide bc")
+        return _probabilistic_remove_edges(edge_index, percent, bc, is_undirected)
 
-        if not torch.is_tensor(bc):
-            bc = torch.tensor(bc, dtype=torch.float, device=edge_index.device)
-        else:
-            bc = bc.to(device=edge_index.device, dtype=torch.float)
-
-        row, col = edge_index
-        edge_scores = (bc[row] + bc[col]) / 2.0
-
-        if is_undirected:
-            mask = row < col
-            unique_edges = edge_index[:, mask]
-            unique_scores = edge_scores[mask]
-        else:
-            unique_edges = edge_index
-            unique_scores = edge_scores
-
-        if unique_edges.size(1) == 0:
-            return edge_index
-
-        if unique_scores.sum() <= 0:
-            probs = torch.ones_like(unique_scores) / unique_scores.numel()
-        else:
-            probs = unique_scores / unique_scores.sum()
-
-        num_edges = unique_edges.size(1)
-        num_remove = int(num_edges * percent)
-        num_remove = min(max(num_remove, 0), num_edges)
-
-        if num_remove > 0:
-            remove_idx = torch.multinomial(probs, num_remove, replacement=False)
-            edges_to_remove = unique_edges[:, remove_idx]
-        else:
-            return edge_index
-
-        num_nodes = int(edge_index.max().item()) + 1
-        if is_undirected:
-            all_row, all_col = edge_index
-            all_u = torch.minimum(all_row, all_col)
-            all_v = torch.maximum(all_row, all_col)
-            all_keys = all_u * num_nodes + all_v
-
-            rem_row, rem_col = edges_to_remove
-            rem_u = torch.minimum(rem_row, rem_col)
-            rem_v = torch.maximum(rem_row, rem_col)
-            rem_keys = rem_u * num_nodes + rem_v
-        else:
-            all_row, all_col = edge_index
-            all_keys = all_row * num_nodes + all_col
-            rem_row, rem_col = edges_to_remove
-            rem_keys = rem_row * num_nodes + rem_col
-
-        keep_mask = ~torch.isin(all_keys, rem_keys)
-
-        new_edge_index = edge_index[:, keep_mask]
-
-        if is_undirected:
-            row, col = new_edge_index
-            rev_edges = torch.stack([col, row], dim=0)
-            new_edge_index = torch.cat([new_edge_index, rev_edges], dim=1)
-            new_edge_index = torch.unique(new_edge_index, dim=1)
-
-        return new_edge_index
+    elif mode in {"bw_prob", "pagerank_prob", "degree_prob", "closeness_prob", "eigenvector_prob"}:
+        if bc is None:
+            raise ValueError(f"For mode='{mode}', provide bc")
+        return _probabilistic_remove_edges(edge_index, percent, bc, is_undirected)
 
     else:
         raise ValueError(f"Unknown mode: {mode}")
