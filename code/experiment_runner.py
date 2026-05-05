@@ -250,10 +250,9 @@ def run_one_dataset(dataset_name, args):
     set_seed(split_seed)
     transform = RandomNodeSplit(
         split="train_rest",
-        num_train_per_class=20,
-        num_val=500,
-        num_test=1000,
-)
+        num_val=0.1,
+        num_test=0.8,
+    )
     data_run = transform(data.clone())
     bc = centrality_scores(data_run, edge_aug_mode)
     eval_bc = centrality_scores(data_run, eval_edge_aug_mode) if eval_edge_aug_mode else None
@@ -350,6 +349,6 @@ def run_one_dataset(dataset_name, args):
     
     with open('/kaggle/working/results.json', 'w') as f:
         json.dump(results_summary, f, indent=2)
-    print("\n✓ Results saved to /kaggle/working/results.json")
+    print("\n Results saved to /kaggle/working/results.json")
 
     _plot_results(args, gcn_results, mlp_results, lr_results)

@@ -56,7 +56,7 @@ def run_suite():
 
        
         try:
-            run_one_dataset("CS", args)
+            run_one_dataset("Physics", args)
             print(f"FINISHED SCENARIO: {scenario['name']}")
         except Exception as e:
             print(f"FAILED SCENARIO {scenario['name']}: {str(e)}")
