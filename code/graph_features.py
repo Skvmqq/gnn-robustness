@@ -26,7 +26,7 @@ class GraphFeatures:
         return self.G.eigenvector_centrality()
 
     def betweenness(self, normalized=True, cutoff=None):
-        bc = self.G.betweenness(cutoff=cutoff)
+        scores = self.G.betweenness(cutoff=cutoff)
 
         if normalized:
             n = self.G.vcount()
@@ -35,9 +35,9 @@ class GraphFeatures:
                     scale = 2 / ((n - 1) * (n - 2))
                 else:
                     scale = 1 / ((n - 1) * (n - 2))
-                bc = [v * scale for v in bc]
+                scores = [v * scale for v in scores]
 
-        return bc
+        return scores
 
     def degree_centrality(self):
         n = self.G.vcount()

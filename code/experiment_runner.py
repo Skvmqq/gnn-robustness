@@ -29,7 +29,7 @@ def train_model_graph(
     edge_aug_is_undirected=True,
     train_feat_aug_mode=None,
     train_feat_aug_percent=0.2,
-    bc=None,
+    scores=None,
 ):
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     loss_fn = nn.CrossEntropyLoss()
@@ -46,7 +46,7 @@ def train_model_graph(
                 "is_undirected": edge_aug_is_undirected,
             }
             if edge_aug_mode in {"bw_prob", "pagerank_prob", "degree_prob"}:
-                edge_kwargs["bc"] = bc
+                edge_kwargs["scores"] = scores
             edge_in = augment_edges(data.edge_index, **edge_kwargs)
 
         if train_feat_aug_mode is None:
@@ -107,7 +107,7 @@ def eval_under_noise(
     eval_edge_aug_is_undirected=True,
     eval_apply_feature_noise=True,
     eval_edge_percent_from_noise=True,
-    bc=None,
+    scores=None,
 ):
     model.eval()
     accs = []
@@ -136,7 +136,7 @@ def eval_under_noise(
                 "is_undirected": eval_edge_aug_is_undirected,
             }
             if eval_edge_aug_mode in {"bw_prob", "pagerank_prob", "degree_prob", "closeness_prob", "eigenvector_prob"}:
-                edge_kwargs["bc"] = bc
+                edge_kwargs["scores"] = scores
             eval_edge_index = augment_edges(eval_edge_index, **edge_kwargs)
 
         logits = model(noisy_x, eval_edge_index)
@@ -147,8 +147,8 @@ def eval_under_noise(
 
 def bw_centrality(data):
     gf = graph_features.GraphFeatures(data, un_directed=True)
-    bc = gf.betweenness(normalized=True)
-    return torch.tensor(bc, dtype=torch.float, device=data.edge_index.device)
+    scores = gf.betweenness(normalized=True)
+    return torch.tensor(scores, dtype=torch.float, device=data.edge_index.device)
 
 
 def pagerank_centrality(data):
@@ -241,7 +241,7 @@ def run_one_dataset(dataset_name, args):
     eval_apply_feature_noise = getattr(args, "eval_apply_feature_noise", True)
     eval_edge_percent_from_noise = getattr(args, "eval_edge_percent_from_noise", True)
 
-    bc = None
+    scores = None
 
     gcn_results = [[] for _ in args.noise_levels]
     mlp_results = [[] for _ in args.noise_levels]
@@ -250,13 +250,14 @@ def run_one_dataset(dataset_name, args):
     split_seed = 0
     set_seed(split_seed)
     transform = RandomNodeSplit(
-        split="train_rest",
-        num_val=0.1,
-        num_test=0.8,
-    )
+    split="test_rest",
+    num_train_per_class=20,
+    num_val=500,
+    num_test=1000,
+)
     data_run = transform(data.clone())
-    bc = centrality_scores(data_run, edge_aug_mode)
-    eval_bc = centrality_scores(data_run, eval_edge_aug_mode) if eval_edge_aug_mode else None
+    scores = centrality_scores(data_run, edge_aug_mode)
+    eval_scores = centrality_scores(data_run, eval_edge_aug_mode) if eval_edge_aug_mode else None
     for run in range(args.runs):
         print(f"\n--- Run {run + 1}/{args.runs} ---")
         set_seed(run)
@@ -273,7 +274,7 @@ def run_one_dataset(dataset_name, args):
             edge_aug_is_undirected=edge_aug_is_undirected,
             train_feat_aug_mode=train_feat_aug_mode,
             train_feat_aug_percent=train_feat_aug_percent,
-            bc=bc,
+            scores=scores,
         )
 
         mlp = MLPModel(dataset.num_features, args, dataset.num_classes, args.dropout)
@@ -298,7 +299,7 @@ def run_one_dataset(dataset_name, args):
             eval_edge_aug_is_undirected=eval_edge_aug_is_undirected,
             eval_apply_feature_noise=eval_apply_feature_noise,
             eval_edge_percent_from_noise=eval_edge_percent_from_noise,
-            bc=eval_bc,
+            scores=eval_scores,
         )
         mlp_curve = eval_under_noise(
             mlp,
@@ -310,7 +311,7 @@ def run_one_dataset(dataset_name, args):
             eval_edge_aug_is_undirected=eval_edge_aug_is_undirected,
             eval_apply_feature_noise=eval_apply_feature_noise,
             eval_edge_percent_from_noise=eval_edge_percent_from_noise,
-            bc=eval_bc,
+            scores=eval_scores,
         )
 
         for i, p in enumerate(args.noise_levels):

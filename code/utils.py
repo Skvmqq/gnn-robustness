@@ -186,7 +186,7 @@ def augment_edges(
 
     elif mode in {"bw_prob", "pagerank_prob", "degree_prob", "closeness_prob", "eigenvector_prob"}:
         if scores is None:
-            raise ValueError(f"For mode='{mode}', provide bc")
+            raise ValueError(f"For mode='{mode}', provide scores")
         return _probabilistic_remove_edges(edge_index, percent, scores, is_undirected)
 
     else:
