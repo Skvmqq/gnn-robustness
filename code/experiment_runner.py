@@ -6,6 +6,7 @@ import torch.nn as nn
 from torch_geometric.datasets import Planetoid
 from torch_geometric.datasets import Coauthor
 from torch_geometric.transforms import RandomNodeSplit
+from torch_geometric.datasets import Amazon
 
 import graph_features
 from model import GCNModel, LogisticRegressionModel, MLPModel
@@ -218,7 +219,7 @@ def _plot_results(args, gcn_results, mlp_results, lr_results):
 
 
 def run_one_dataset(dataset_name, args):
-    dataset = Coauthor(root='data', name=dataset_name)
+    dataset = Amazon(root='data', name=dataset_name)
     data = dataset[0]
 
     edge_aug_mode = getattr(args, "edge_aug_mode", "bw_prob")

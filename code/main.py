@@ -18,7 +18,12 @@ class BaseArgs:
 def run_suite():
     
     scenarios = [
+
         {"name":"TrainEdge_None__Eval_FeatureNoiseOnly","feat_mode":None,"edge_mode":None, "eval_edge_mode": None, "eval_feature_noise": True},
+        {"name":"TrainEdge_Feature_aug__Eval_FeatureNoiseOnly","feat_mode":"noise","edge_mode":None, "eval_edge_mode": None, "eval_feature_noise": True},
+        {"name":"TrainEdge_Feature_aug_and_dropout__Eval_FeatureNoiseOnly","feat_mode":"noise","edge_mode":"dropout", "eval_edge_mode": None, "eval_feature_noise": True},
+
+        
         {"name":"TrainEdge_None__Eval_EdgeDropoutOnly","feat_mode":None,"edge_mode":None, "eval_edge_mode": "dropout", "eval_feature_noise": False},
         {"name":"TrainEdge_None__Eval_FeatureNoisePlusEdgeDropout","feat_mode":None,"edge_mode":None, "eval_edge_mode": "dropout", "eval_feature_noise": True},
         
@@ -56,7 +61,7 @@ def run_suite():
 
        
         try:
-            run_one_dataset("Physics", args)
+            run_one_dataset("Photo", args)
             print(f"FINISHED SCENARIO: {scenario['name']}")
         except Exception as e:
             print(f"FAILED SCENARIO {scenario['name']}: {str(e)}")

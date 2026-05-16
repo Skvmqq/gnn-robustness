@@ -129,7 +129,7 @@ def augment_edges(
     mode="dropout",
     percent=0.1,
     k=None,
-    bc=None,
+    scores=None,
     hub_nodes=None,
     is_undirected=True,
 ):
@@ -183,15 +183,11 @@ def augment_edges(
 
         return new_edge_index
 
-    elif mode == "bw_prob":
-        if bc is None:
-            raise ValueError("For mode='bw_prob', provide bc")
-        return _probabilistic_remove_edges(edge_index, percent, bc, is_undirected)
 
     elif mode in {"bw_prob", "pagerank_prob", "degree_prob", "closeness_prob", "eigenvector_prob"}:
-        if bc is None:
+        if scores is None:
             raise ValueError(f"For mode='{mode}', provide bc")
-        return _probabilistic_remove_edges(edge_index, percent, bc, is_undirected)
+        return _probabilistic_remove_edges(edge_index, percent, scores, is_undirected)
 
     else:
         raise ValueError(f"Unknown mode: {mode}")
